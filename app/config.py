@@ -8,8 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # OCR
-    tesseract_cmd: str = "tesseract"
+    # OCR (the `tesseract` binary is resolved from PATH)
     ocr_dpi: int = 300
     ocr_lang: str = "eng"
     ocr_psm: int = 3
