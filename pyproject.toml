@@ -22,6 +22,7 @@ dependencies = [
     "rapidfuzz",
     # Embeddings + vector store (Chroma is embedded/local; swap for qdrant-client if preferred)
     "sentence-transformers",
+    "torch",  # listed directly only to pin the CPU build (see [tool.uv.sources])
     "chromadb",
     # LLM / HTTP
     "httpx",
@@ -44,6 +45,12 @@ notebooks = [
 
 [tool.uv.sources]
 en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]
