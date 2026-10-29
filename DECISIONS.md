@@ -49,6 +49,15 @@ Before any code, I set up the rules Claude Code works under (kept locally, not i
 - **Measured on 27 labeled pairs** (`eval/gold_fuzzy_pairs.csv`: 15 same-person variants, 12 hard negatives): recall 12/15 and false-positive rate 4/12, each with a 95 % Wilson interval ([0.55, 0.93] and [0.14, 0.61]), because the Wald interval breaks down at small n (Brown, Cai & DasGupta 2001). Precision and F1 are not reported: they depend on the positive/negative mix I chose, and F1 weighs precision and recall differently by method and threshold (Hand & Christen 2018). These are resubstitution numbers: the same pairs informed the choice of scorer, and Christen (2006) notes that thresholds depend on the data.
 - **Known limits:** initials ("J. Anderson"), middle names, two or more OCR errors in one name, and names one letter apart (Mario/Maria) are not resolved; `ø`/`ł` are not folded and `ü` does not become `ue`.
 
+## Person NER
+
+- **spaCy `en_core_web_sm`, label PERSON only**, behind a `NameRecognizer` Protocol, so unit tests use a fake (a lambda) and never load the model. The model is loaded once per name with `lru_cache`, on first use, not at import.
+- **Spans per page, `(name, start, end)`.** Box lookup (OCR words) needs character offsets on each page's text, so `find_person_spans(pages)` works page by page. `extract_names(text)` keeps the stub's signature and treats the text as one page.
+- **Three filters**, from the error analysis on the samples: a span that crosses a line break, a single word, or ALL CAPS (headers) is not a person name. Only the ALL CAPS filter is configurable (`NER_DROP_ALL_CAPS`), because it depends on the document type; "two words or more" defines a full name and keeps propagation safe.
+- **Document-level propagation.** A name found on any page is also marked at its other exact, whole-word occurrences in the same document (never across documents). Within a document the same string rarely changes entity type (Finkel et al. 2005, Sec. 5.1, Table 3), and document-level consistency adds +2.95 F1 on persons while corpus-level adds only +0.09 (Krishnan & Manning 2006, Table 3); the principle goes back to "one sense per discourse" (Gale et al. 1992). Gains depend on the text type (Ratinov & Roth 2009), so I measured it: recall 0.945 → 0.982, no new false positives.
+- **Measured on 55 labeled mentions** (`eval/gold_names.csv`, 3 sample PDFs): precision 54/54 = 1.0, recall 54/55 = 0.982. `app/` reproduces the notebook's spans exactly. Same caveat as fuzzy matching: these are the samples that guided the filters.
+- **Known limits:** propagation is case-sensitive ("ROBERT CHEN" is not linked to "Robert Chen"); single-word mentions are dropped on purpose; a propagated span partially overlapping a longer spaCy span would give two spans (0 cases in the samples).
+
 ## Use of AI tools
 
 - Claude Code (Anthropic) was used as a pair-programmer: researching options, drafting code and tests, and reviewing. The author reviewed and ran every change, owns every line, and made every commit.
@@ -59,4 +68,8 @@ Before any code, I set up the rules Claude Code works under (kept locally, not i
 - Brown, L. D., Cai, T. T., & DasGupta, A. (2001). Interval estimation for a binomial proportion. *Statistical Science*, 16(2), 101–133.
 - Christen, P. (2006). *A comparison of personal name matching: Techniques and practical issues*. Technical Report TR-CS-06-02, The Australian National University.
 - Cohen, W. W., Ravikumar, P., & Fienberg, S. E. (2003). A comparison of string metrics for matching names and records. *KDD Workshop on Data Cleaning and Object Consolidation*.
+- Finkel, J. R., Grenager, T., & Manning, C. (2005). Incorporating non-local information into information extraction systems by Gibbs sampling. *ACL 2005*.
+- Gale, W. A., Church, K. W., & Yarowsky, D. (1992). One sense per discourse. *DARPA Speech and Natural Language Workshop*.
 - Hand, D., & Christen, P. (2018). A note on using the F-measure for evaluating record linkage algorithms. *Statistics and Computing*, 28(3), 539–547.
+- Krishnan, V., & Manning, C. D. (2006). An effective two-stage model for exploiting non-local dependencies in named entity recognition. *COLING-ACL 2006*.
+- Ratinov, L., & Roth, D. (2009). Design challenges and misconceptions in named entity recognition. *CoNLL 2009*.
