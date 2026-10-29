@@ -5,11 +5,14 @@ and wire whatever cross-cutting concerns you decide on (config, logging,
 error handling, lifecycle). This skeleton just registers the routers.
 """
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from app.api.extract import router as extract_router
 from app.api.rag import router as rag_router
+from app.log import log_requests
 from app.services.ocr_service import (
     DocumentTooLargeError,
     InvalidPdfError,
@@ -18,7 +21,10 @@ from app.services.ocr_service import (
 
 ERROR_STATUS = {InvalidPdfError: 422, DocumentTooLargeError: 413, OcrEngineError: 503}
 
+logging.basicConfig(format="%(message)s", level=logging.INFO)
+
 app = FastAPI(title="Document Intelligence Service")
+app.middleware("http")(log_requests)
 
 
 def domain_error(request, exc):

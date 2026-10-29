@@ -1,4 +1,5 @@
 import json
+import logging
 
 import pytest
 from fastapi.testclient import TestClient
@@ -95,3 +96,27 @@ def test_ac_api_05_engine_failure_is_503(fake):
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Tesseract failed"}
+
+
+def test_ac_log_01_json_log_with_request_id_and_no_names(fake, caplog):
+    caplog.set_level(logging.INFO, logger="app")
+    files = {"pdf_file": ("doc.pdf", blank_pdf(), "application/pdf")}
+    data = {"names": json.dumps(ANN_LEE)}
+
+    response = TestClient(app).post(
+        "/api/extract", files=files, data=data, headers={"X-Request-ID": "abc"}
+    )
+
+    assert response.headers["X-Request-ID"] == "abc"
+    events = [json.loads(r.getMessage()) for r in caplog.records if r.name == "app"]
+    assert {
+        "request_id": "abc",
+        "pages": 1,
+        "names_in": 1,
+        "names_found": 1,
+        "matches": 1,
+    } in events
+    request = next(e for e in events if "status" in e)
+    assert request["request_id"] == "abc" and request["status"] == 200
+    assert "ann" not in caplog.text.lower()
+    assert post(blank_pdf()).headers["X-Request-ID"] not in ("", "abc")
