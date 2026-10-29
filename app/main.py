@@ -21,7 +21,8 @@ from app.services.ocr_service import (
 
 ERROR_STATUS = {InvalidPdfError: 422, DocumentTooLargeError: 413, OcrEngineError: 503}
 
-logging.basicConfig(format="%(message)s", level=logging.INFO)
+logging.basicConfig(format="%(message)s")
+logging.getLogger("app").setLevel(logging.INFO)  # ours only; libraries stay at WARNING
 
 app = FastAPI(title="Document Intelligence Service")
 app.middleware("http")(log_requests)
