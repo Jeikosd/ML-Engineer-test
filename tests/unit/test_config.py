@@ -18,3 +18,10 @@ def test_ac_cfg_02_threshold_out_of_range_rejected(monkeypatch):
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_ac_cfg_03_ner_defaults():
+    settings = Settings(_env_file=None)
+
+    assert settings.ner_model == "en_core_web_sm"
+    assert settings.ner_drop_all_caps is True

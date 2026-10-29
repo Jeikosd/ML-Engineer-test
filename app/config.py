@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     ocr_psm: int = 3
     ocr_timeout_s: int = 30
 
+    # NER
+    ner_model: str = "en_core_web_sm"
+    ner_drop_all_caps: bool = True
+
     # Embeddings
     embedding_device: str = "cpu"
 
