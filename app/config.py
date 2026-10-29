@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +17,9 @@ class Settings(BaseSettings):
 
     # Embeddings
     embedding_device: str = "cpu"
+
+    # Fuzzy matching
+    fuzzy_threshold: float = Field(0.90, ge=0.0, le=1.0)
 
 
 @lru_cache

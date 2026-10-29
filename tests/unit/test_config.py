@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from app.config import Settings
 
 
@@ -8,3 +11,10 @@ def test_ac_cfg_01_env_overrides_defaults(monkeypatch):
 
     assert settings.ocr_dpi == 150
     assert settings.ocr_lang == "eng"
+
+
+def test_ac_cfg_02_threshold_out_of_range_rejected(monkeypatch):
+    monkeypatch.setenv("FUZZY_THRESHOLD", "1.5")
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
