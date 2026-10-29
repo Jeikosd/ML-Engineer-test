@@ -1,6 +1,7 @@
 """Centralized, environment-overridable settings (read from env vars or `.env`)."""
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +15,7 @@ class Settings(BaseSettings):
     ocr_lang: str = "eng"
     ocr_psm: int = 3
     ocr_timeout_s: int = 30
+    bbox_origin: Literal["top-left", "bottom-left"] = "top-left"
 
     # NER
     ner_model: str = "en_core_web_sm"

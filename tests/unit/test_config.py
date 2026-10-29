@@ -25,3 +25,7 @@ def test_ac_cfg_03_ner_defaults():
 
     assert settings.ner_model == "en_core_web_sm"
     assert settings.ner_drop_all_caps is True
+
+
+def test_ac_cfg_04_bbox_origin_default():
+    assert Settings(_env_file=None).bbox_origin == "top-left"
