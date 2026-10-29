@@ -26,7 +26,7 @@
 
 **Por qué así:**
 - **Bytes y una sola apertura (D-OCR-1, R6):** el upload llega en memoria, así que no hacen falta archivos temporales. Abrir por path o por `stream` da el mismo render (md5 idéntico) y el mismo `page.rect`. El proto abría el PDF 1+N veces (`proto/ocr.py:20,56`).
-- **`filetype="pdf"` siempre:** sin él, pymupdf abre un PNG como si fuera un documento.
+- **`filetype="pdf"` y `doc.is_pdf`:** pymupdf abre un PNG como documento de imagen aunque se pase `filetype="pdf"` (medido en la implementación), así que `ocr_pages` comprueba `doc.is_pdf` y lanza `InvalidPdfError`.
 - **Cajas por offsets, no por búsqueda de cadenas (D-OCR-6):** el span NER y las palabras comparten el mismo texto de página, así que no hay comparación que falle por mayúsculas o por ruido OCR. Ese requisito del README (README:92-94) es de name matching y lo cubre el fuzzy.
 - **Volteo por palabra (D-OCR-3):** `y = H - y - h` es monótono, así que el min/max de la unión no cambia.
 - **Sin pandas en `app/`:** listas de dicts.
@@ -44,7 +44,7 @@ En los unitarios, `fake` es un engine falso y la config se controla con `monkeyp
 - **AC-OCR-02** Given un PDF de 2 páginas y un fake que devuelve una palabra por llamada, When se llama a `ocr_pages`, Then hay 2 listas, con `page` 0 y 1, y el fake se llamó 2 veces. _Test: unitario_
 - **AC-OCR-03** Given un fake con `conf = -1`, con texto `"  "` y con una palabra válida, When se llama a `ocr_pages`, Then solo queda la palabra válida. _Test: unitario_
 - **AC-OCR-04** Given un fake con "Ann" y "Lee" en `(1, 1, 1)` y "Bob" en `(2, 1, 1)` (otro bloque, mismo `line_num`), When se llama a `page_text(ocr_pages(pdf, fake)[0])`, Then el texto es `"Ann Lee\nBob"` y los offsets son `(0, 3), (4, 7), (8, 11)`. Falla si el renglón se agrupa solo por `line_num`. _Test: unitario_
-- **AC-OCR-05** Given `b""`, `b"not a pdf"` y `b"%PDF-1.4\n%garbage"`, When se llama a `ocr_pages`, Then se lanza `InvalidPdfError`. _Test: unitario_
+- **AC-OCR-05** Given `b""`, `b"not a pdf"`, `b"%PDF-1.4\n%garbage"` y los bytes de un PNG, When se llama a `ocr_pages`, Then se lanza `InvalidPdfError`. _Test: unitario_
 - **AC-OCR-06** Given `bbox_origin="bottom-left"` y el fake de AC-OCR-01, When se llama a `ocr_pages`, Then `y == 792 - 96.0 - 12.0`. _Test: unitario_
 - **AC-BOX-01** Given "Ann" (`x=10, width=20, y=5, height=10`) y "Lee" (`x=35, width=15, y=7, height=10`) en la página 1, con offsets (0, 3) y (4, 7), y el span ("Ann Lee", 0, 7), When se llama a `boxes_for_spans`, Then sale `{"name": "Ann Lee", "page": 1, "x": 10, "y": 5, "width": 40, "height": 12}`. Falla si se toma la altura de la última palabra. _Test: unitario_
 - **AC-BOX-02** Given la palabra OCR "Thompson," y el span "Margaret Thompson", que termina antes de la coma, When se llama a `boxes_for_spans`, Then el `width` llega hasta el borde derecho de la palabra "Thompson,", con la coma incluida. _Test: unitario_

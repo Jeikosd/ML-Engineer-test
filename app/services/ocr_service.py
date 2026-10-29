@@ -57,6 +57,8 @@ def ocr_pages(pdf_bytes: bytes, engine: OcrEngine | None = None) -> list[list[Wo
     """OCR every page (including the first); one list of words per page."""
     try:
         with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
+            if not doc.is_pdf:  # pymupdf opens images (PNG...) despite filetype
+                raise InvalidPdfError("not a PDF")
             return [_page_words(page, engine or tesseract_data) for page in doc]
     except pymupdf.FileDataError as err:
         raise InvalidPdfError("not a readable PDF") from err

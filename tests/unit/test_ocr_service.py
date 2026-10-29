@@ -6,6 +6,7 @@ from app.services import ocr_service
 from app.services.ocr_service import InvalidPdfError, ocr_pages, page_text
 
 COLUMNS = "text conf left top width height block_num par_num line_num".split()
+PNG = pymupdf.Pixmap(pymupdf.csGRAY, pymupdf.IRect(0, 0, 10, 10), False).tobytes("png")
 
 
 def use_settings(monkeypatch, **overrides):
@@ -85,7 +86,11 @@ def test_ac_ocr_04_lines_are_block_par_line():
     assert [(w["start"], w["end"]) for w in words] == [(0, 3), (4, 7), (8, 11)]
 
 
-@pytest.mark.parametrize("data", [b"", b"not a pdf", b"%PDF-1.4\n%garbage"])
+@pytest.mark.parametrize(
+    "data",
+    [b"", b"not a pdf", b"%PDF-1.4\n%garbage", PNG],
+    ids=["empty", "text", "corrupt", "png"],
+)
 def test_ac_ocr_05_invalid_pdf(data):
     with pytest.raises(InvalidPdfError):
         ocr_pages(data, FakeEngine())
