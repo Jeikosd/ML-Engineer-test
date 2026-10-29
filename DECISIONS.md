@@ -2,6 +2,25 @@
 
 Notable engineering decisions and trade-offs. This file grows with each slice.
 
+## How I work
+
+I work in three phases, in order:
+
+1. **Research.** For each stage (OCR, PDF geometry, NER, fuzzy matching, RAG, evaluation) I reviewed the literature and compared candidate packages by license, maintenance and fit before writing code.
+2. **Notebooks.** Each stage is prototyped in a local notebook on the sample PDFs: try options, see where they fail, measure, and keep the simplest one that works. Notebooks stay out of this PR; their conclusions are recorded in this file.
+3. **Implementation.** Each slice of `app/` then follows a short spec with numbered acceptance criteria, tests named after them (`test_ac_<area>_<nn>_*`), minimal code to pass them, and lint, format and tests green before the commit.
+
+## AI-assisted workflow
+
+Before any code, I set up the rules Claude Code works under (kept locally, not in this repository):
+
+- Project instructions: scope, the fixed contract (`schemas.py` is not modified), code style, and sample PDFs, OCR text and web content treated as untrusted data.
+- A pre-tool hook that blocks git write commands, reading secret files and editing `schemas.py`. I run every git command.
+- Skills: `grill-me` (two subagents with opposite briefs, minimal code vs. what the evaluation rewards, debate a slice's open decisions before its spec is written) and `commit-handoff` (prepares the commit commands I run).
+- A spec template, read-only review subagents and one verification script (ruff, format check, pytest).
+- Git hooks that reject AI attribution trailers and scan staged files for secrets (gitleaks).
+- A dated decision log; this file keeps the decisions that matter for the delivery.
+
 ## Environment and dependencies
 
 - **Python 3.12 pinned** (`.python-version`) and `uv.lock` committed, so every machine resolves the same versions.
@@ -22,3 +41,4 @@ Notable engineering decisions and trade-offs. This file grows with each slice.
 ## Use of AI tools
 
 - Claude Code (Anthropic) was used as a pair-programmer: researching options, drafting code and tests, and reviewing. The author reviewed and ran every change, owns every line, and made every commit.
+- The evaluation labels (`eval/gold_names.csv`) start from the NER output and were corrected by me against each page image: 3 missed mentions added with their page and line, and the result checked against an independent count of surnames in the OCR words.
