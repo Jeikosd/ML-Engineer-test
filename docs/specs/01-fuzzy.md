@@ -65,3 +65,25 @@
 
 ## Explicación (JM)
 _Por cada AC, en 3 a 5 líneas: qué líneas lo cumplen y por qué. Respuestas a 3 preguntas de entrevistador. Se firma solo cuando Jeison puede explicarlo sin mirar._
+
+_Redactada por Claude y revisada por Jeison. Las líneas son de `app/services/fuzzy_service.py` (commit 3f6e372). Firmada por Jeison Mesa, 2026-10-29._
+
+- **AC-FUZ-01** (acentos y mayúsculas): en `_normalize`, la línea 15 pasa a minúsculas con `casefold` y separa cada letra de su acento con NFKD; la 16 borra las marcas combinantes. "María González" y "Maria Gonzalez" dan la misma clave, así que el score es 1.0.
+- **AC-FUZ-02** (nombre a medias): en la línea 46, `fuzz.ratio` compara las cadenas completas: "maria" contra "maria gonzalez" da 52.6. No se usan `partial_ratio` ni `token_set_ratio`, que darían 100.
+- **AC-FUZ-03** (ruido OCR): también la línea 46. Indel cuenta las inserciones y los borrados, así que una letra cambiada cuesta 2 sobre 32 caracteres: 1 − 2/32 = 0.9375.
+- **AC-FUZ-04** (orden invertido): `token_sort_ratio`, en la línea 46, ordena las palabras antes de comparar. El `max` se queda con el mejor de los dos scores.
+- **AC-FUZ-05** (mismo apellido, otra persona): Robert contra James Chen da 0.571, bajo el umbral, y la línea 48 lo descarta.
+- **AC-FUZ-06a/b** (umbral): las líneas 40-41 usan el valor explícito, o `get_settings().fuzzy_threshold` si llega `None`. El valor está en `app/config.py` con `Field(ge=0, le=1)` y lo cambia `FUZZY_THRESHOLD`.
+- **AC-FUZ-07** (orden y decimales): la línea 49 redondea a 4 decimales solo la salida. La 50 ordena por score descendente y desempata por `extracted_name` y luego por `matched_name`.
+- **AC-FUZ-08** (dedupe): `_by_key`, en las líneas 22-28, guarda la primera aparición de cada clave normalizada (`setdefault` no sobrescribe). Se aplica a los dos lados (líneas 42 y 44).
+- **AC-FUZ-09** (vacíos): con una lista vacía uno de los bucles no itera, `hits` queda en `[]` y se devuelve `[]`.
+- **AC-FUZ-10** (schema): la línea 51 arma los dicts con las claves exactas de `FuzzyMatch`, y el score queda en [0, 1].
+- **AC-FUZ-11** (título): la línea 19 quita {dr, mr, ...} después de que la 18 pase "dr." a "dr".
+- **AC-FUZ-12** (borde 0.90): la línea 48 usa `>=`, y 1 − 2/20 da exactamente 0.9, así que el par se reporta.
+- **AC-FUZ-13** (clave vacía): en la línea 26, `if key :=` descarta las claves vacías, porque `fuzz.ratio("", "")` daría 100.
+- **AC-CFG-02**: `Field(ge=0.0, le=1.0)` hace que `FUZZY_THRESHOLD=1.5` lance `ValidationError` al crear `Settings`.
+
+**Preguntas de entrevistador**
+1. *¿Por qué no `WRatio`, que es el default de rapidfuzz?* Porque combina `partial_ratio` y `token_set_ratio`, que inflan los nombres a medias, y el README pide similitud de cadena completa.
+2. *¿Por qué filtras antes de redondear?* El umbral se aplica al valor medido y el redondeo es solo presentación. Con nombres reales no cambia ningún resultado: el mayor score por debajo de 0.90 es 0.8983.
+3. *¿Qué falla y qué harías en producción?* Las iniciales, los segundos nombres y 2 o más errores de OCR quedan como falsos negativos. Los nombres a una letra de otro (Mario/Maria) son falsos positivos, y lo ve quien revisa la caja. En producción mediría el umbral con datos reales etiquetados, porque estas cifras salen de resubstitución.
