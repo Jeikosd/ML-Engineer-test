@@ -66,7 +66,7 @@ En los unitarios, `fake` es un recognizer falso. La config se controla con `monk
 ## Explicación (JM)
 _Por cada AC, en 3 a 5 líneas: qué líneas lo cumplen y por qué. Respuestas a 3 preguntas de entrevistador. Se firma solo cuando Jeison puede explicarlo sin mirar._
 
-_Borrador de Claude para que Jeison lo revise. Las líneas son de `app/services/ner_service.py` (60 líneas). Pendiente: la firma de Jeison._
+_Redactada por Claude y revisada por Jeison. Las líneas son de `app/services/ner_service.py` (commit 1784712, 60 líneas). Firmada por Jeison Mesa, 2026-10-29._
 
 - **AC-NER-01** (solo PERSON): la línea 27 se queda solo con `e.label_ == "PERSON"`. Así, "Acme Corp" (ORG), "Paris" (GPE) y "Monday" (DATE) no salen. `extract_names` (línea 60) devuelve los nombres. Es el único test con el modelo real.
 - **AC-NER-02** (filtros): `_is_name`, en la línea 32, descarta un span si tiene `"\n"` (cruza renglón), si no tiene `" "` (una sola palabra) o si está en MAYÚSCULAS. `"Robert Chen\nCFO"` tiene espacio, así que solo lo descarta el filtro de renglón, y por eso el test detecta si alguien quita ese filtro.
