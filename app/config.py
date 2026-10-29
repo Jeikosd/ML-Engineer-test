@@ -26,7 +26,14 @@ class Settings(BaseSettings):
     ner_drop_all_caps: bool = True
 
     # Embeddings
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_device: str = "cpu"
+
+    # RAG
+    chunk_size: int = Field(500, gt=0)
+    chunk_overlap: int = Field(60, ge=0)
+    chroma_path: str = "data/chroma"
+    chroma_collection: str = "documents"
 
     # Fuzzy matching
     fuzzy_threshold: float = Field(0.90, ge=0.0, le=1.0)

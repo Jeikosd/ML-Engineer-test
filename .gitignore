@@ -16,6 +16,9 @@ venv/
 .env.*
 !.env.example
 
+# Local data (Chroma store)
+/data/
+
 # OS / IDE
 .DS_Store
 .idea/
