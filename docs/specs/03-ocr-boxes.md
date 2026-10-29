@@ -65,4 +65,4 @@ En los unitarios, `fake` es un engine falso y la config se controla con `monkeyp
 ## Explicación (JM)
 _Por cada AC, en 3 a 5 líneas: qué líneas lo cumplen y por qué. Respuestas a 3 preguntas de entrevistador. Se firma solo cuando Jeison puede explicarlo sin mirar._
 
-_Pendiente: se escribe tras la implementación._
+_Está en el notebook local de la tarea (`notebooks/02a_ner_cajas.ipynb`, sección «Explicación de los AC de la spec 03»), que no llega al repo. Jeison la estudia allí, junto a las celdas que muestran cada número._
