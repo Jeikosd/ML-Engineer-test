@@ -17,19 +17,30 @@ class OcrEngine(Protocol):
 
 
 class InvalidPdfError(ValueError):
-    """The bytes are empty, not a PDF, or a corrupt PDF."""
+    """The bytes are empty, not a PDF, corrupt, or password-protected."""
+
+
+class DocumentTooLargeError(ValueError):
+    """The upload or its page count exceeds the configured limits."""
+
+
+class OcrEngineError(RuntimeError):
+    """Tesseract is missing or failed (timeout included)."""
 
 
 def tesseract_data(image: Image.Image) -> dict[str, list]:
     """Default engine: Tesseract word table (pixels), configured from settings."""
     settings = get_settings()
-    return pytesseract.image_to_data(
-        image,
-        lang=settings.ocr_lang,
-        config=f"--psm {settings.ocr_psm}",
-        timeout=settings.ocr_timeout_s,
-        output_type=pytesseract.Output.DICT,
-    )
+    try:
+        return pytesseract.image_to_data(
+            image,
+            lang=settings.ocr_lang,
+            config=f"--psm {settings.ocr_psm}",
+            timeout=settings.ocr_timeout_s,
+            output_type=pytesseract.Output.DICT,
+        )
+    except (RuntimeError, pytesseract.TesseractNotFoundError) as err:
+        raise OcrEngineError("Tesseract failed or is not installed") from err
 
 
 def _page_words(page: pymupdf.Page, engine: OcrEngine) -> list[Word]:
@@ -59,6 +70,10 @@ def ocr_pages(pdf_bytes: bytes, engine: OcrEngine | None = None) -> list[list[Wo
         with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
             if not doc.is_pdf:  # pymupdf opens images (PNG...) despite filetype
                 raise InvalidPdfError("not a PDF")
+            if doc.needs_pass:
+                raise InvalidPdfError("password-protected PDF")
+            if doc.page_count > get_settings().max_pages:
+                raise DocumentTooLargeError("too many pages")
             return [_page_words(page, engine or tesseract_data) for page in doc]
     except pymupdf.FileDataError as err:
         raise InvalidPdfError("not a readable PDF") from err

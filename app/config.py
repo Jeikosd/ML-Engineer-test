@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     ocr_timeout_s: int = 30
     bbox_origin: Literal["top-left", "bottom-left"] = "top-left"
 
+    # Upload limits
+    max_upload_mb: int = Field(20, gt=0)
+    max_pages: int = Field(50, gt=0)
+
     # NER
     ner_model: str = "en_core_web_sm"
     ner_drop_all_caps: bool = True

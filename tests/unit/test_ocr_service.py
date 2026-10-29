@@ -1,9 +1,17 @@
 import pymupdf
+import pytesseract
 import pytest
 
 from app.config import Settings
 from app.services import ocr_service
-from app.services.ocr_service import InvalidPdfError, ocr_pages, page_text
+from app.services.ocr_service import (
+    DocumentTooLargeError,
+    InvalidPdfError,
+    OcrEngineError,
+    ocr_pages,
+    page_text,
+    tesseract_data,
+)
 
 COLUMNS = "text conf left top width height block_num par_num line_num".split()
 PNG = pymupdf.Pixmap(pymupdf.csGRAY, pymupdf.IRect(0, 0, 10, 10), False).tobytes("png")
@@ -102,3 +110,42 @@ def test_ac_ocr_06_bottom_left_origin(monkeypatch):
     word = ocr_pages(blank_pdf(), FakeEngine(row("Hola")))[0][0]
 
     assert word["y"] == 792 - 96.0 - 12.0
+
+
+def test_ac_ocr_07_encrypted_pdf_is_invalid():
+    with pymupdf.open() as doc:
+        doc.new_page()
+        data = doc.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw="secret")
+    fake = FakeEngine(row("Hola"))
+
+    with pytest.raises(InvalidPdfError):
+        ocr_pages(data, fake)
+
+    assert fake.calls == 0
+
+
+def test_ac_ocr_08_too_many_pages(monkeypatch):
+    use_settings(monkeypatch, ocr_dpi=150, max_pages=1)
+    fake = FakeEngine(row("Hola"))
+
+    with pytest.raises(DocumentTooLargeError):
+        ocr_pages(blank_pdf(2), fake)
+
+    assert fake.calls == 0
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [RuntimeError("Tesseract process timeout"), pytesseract.TesseractNotFoundError()],
+    ids=["timeout", "missing-binary"],
+)
+def test_ac_ocr_09_engine_failure_is_wrapped(monkeypatch, failure):
+    def broken(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(pytesseract, "image_to_data", broken)
+
+    with pytest.raises(OcrEngineError) as info:
+        tesseract_data(None)
+
+    assert info.value.__cause__ is failure
