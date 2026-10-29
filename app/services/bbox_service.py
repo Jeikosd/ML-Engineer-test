@@ -6,7 +6,7 @@ offsets (not by string search). Edge punctuation ("Thompson,") stays in the box.
 
 from pathlib import Path
 
-from app.services.ner_service import Span, find_person_spans
+from app.services.ner_service import NameRecognizer, Span, find_person_spans
 from app.services.ocr_service import Word, ocr_pages, page_text
 
 
@@ -23,10 +23,12 @@ def boxes_for_spans(words: list[Word], spans: list[Span]) -> list[dict]:
     return boxes
 
 
-def locate_names(pages: list[list[Word]]) -> list[dict]:
+def locate_names(
+    pages: list[list[Word]], recognizer: NameRecognizer | None = None
+) -> list[dict]:
     """Boxes of every person on every page; NER runs once so names propagate."""
     placed = [page_text(words) for words in pages]
-    spans = find_person_spans([text for text, _ in placed])
+    spans = find_person_spans([text for text, _ in placed], recognizer)
     return [
         box
         for (_, words), page_spans in zip(placed, spans, strict=True)

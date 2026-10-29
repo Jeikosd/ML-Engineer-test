@@ -55,7 +55,7 @@ def test_ac_box_03_one_box_per_occurrence():
 def test_ac_box_06_ner_called_once_for_all_pages(monkeypatch):
     calls = []
 
-    def fake_ner(texts):
+    def fake_ner(texts, recognizer):
         calls.append(texts)
         return [[("Ann Lee", 0, 7)] for _ in texts]
 

@@ -6,11 +6,27 @@ error handling, lifecycle). This skeleton just registers the routers.
 """
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from app.api.extract import router as extract_router
 from app.api.rag import router as rag_router
+from app.services.ocr_service import (
+    DocumentTooLargeError,
+    InvalidPdfError,
+    OcrEngineError,
+)
+
+ERROR_STATUS = {InvalidPdfError: 422, DocumentTooLargeError: 413, OcrEngineError: 503}
 
 app = FastAPI(title="Document Intelligence Service")
+
+
+def domain_error(request, exc):
+    return JSONResponse({"detail": str(exc)}, status_code=ERROR_STATUS[type(exc)])
+
+
+for error in ERROR_STATUS:
+    app.add_exception_handler(error, domain_error)
 
 app.include_router(extract_router, prefix="/api", tags=["extraction"])
 app.include_router(rag_router, prefix="/api", tags=["rag"])
