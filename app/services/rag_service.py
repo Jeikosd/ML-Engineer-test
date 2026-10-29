@@ -7,9 +7,25 @@ fabricated sources); handle a missing/failing LLM cleanly.
 """
 
 
-def chunk_text(text: str, chunk_size: int = 500) -> list[str]:
-    """Split text into retrieval chunks without breaking words."""
-    raise NotImplementedError
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 60) -> list[str]:
+    """Split text into whole-word chunks; each starts with the previous one's tail."""
+    if not 0 <= overlap < chunk_size:
+        raise ValueError("overlap must satisfy 0 <= overlap < chunk_size")
+    chunks, current = [], []
+    for word in text.split():
+        if current and len(" ".join([*current, word])) > chunk_size:
+            chunks.append(" ".join(current))
+            tail = []
+            for previous in reversed(current):
+                tail_len = len(" ".join([previous, *tail]))
+                if tail_len > overlap or tail_len + 1 + len(word) > chunk_size:
+                    break
+                tail = [previous, *tail]
+            current = tail
+        current.append(word)
+    if current:
+        chunks.append(" ".join(current))
+    return chunks
 
 
 def generate_answer(question: str) -> dict:
