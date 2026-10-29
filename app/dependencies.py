@@ -3,6 +3,7 @@
 from fastapi import UploadFile
 
 from app.config import get_settings
+from app.services.embedding_service import Embedder, get_embeddings
 from app.services.ner_service import NameRecognizer, spacy_persons
 from app.services.ocr_service import DocumentTooLargeError, OcrEngine, tesseract_data
 
@@ -13,6 +14,10 @@ def get_ocr_engine() -> OcrEngine:
 
 def get_recognizer() -> NameRecognizer:
     return spacy_persons
+
+
+def get_embedder() -> Embedder:
+    return get_embeddings
 
 
 def read_pdf(pdf_file: UploadFile) -> bytes:

@@ -30,18 +30,6 @@ class FakeEmbedder:
         return vectors
 
 
-@pytest.fixture
-def chroma(tmp_path, monkeypatch):
-    """Chroma in tmp_path with the fake model name; caches cleared around the test."""
-    monkeypatch.setenv("CHROMA_PATH", str(tmp_path / "chroma"))
-    monkeypatch.setenv("EMBEDDING_MODEL", "fake-384")
-    get_settings.cache_clear()
-    _collection.cache_clear()
-    yield
-    get_settings.cache_clear()
-    _collection.cache_clear()
-
-
 def store(doc_id, texts, embed):
     metadata = [
         {"doc_id": doc_id, "filename": f"{doc_id}.pdf", "page": 0, "chunk": i}
