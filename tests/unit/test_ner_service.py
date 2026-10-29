@@ -34,3 +34,34 @@ def test_ac_ner_07_extract_names_unique_and_empty(monkeypatch):
     assert find_person_spans([]) == []
     monkeypatch.setattr(ner_service, "spacy_persons", lambda text: [])
     assert extract_names("") == []
+
+
+def test_ac_ner_03_propagates_to_other_pages():
+    pages = ["Robert Chen signed", "Robert Chen and Robert Chen"]
+    fake = {pages[0]: [("Robert Chen", 0, 11)], pages[1]: []}.get
+
+    result = find_person_spans(pages, fake)
+
+    assert result[1] == [("Robert Chen", 0, 11), ("Robert Chen", 16, 27)]
+
+
+def test_ac_ner_04_word_boundaries_and_no_duplicates():
+    page = "Ann Lee met Ann Leeds and LeeAnn Lee"
+
+    result = find_person_spans([page], lambda text: [("Ann Lee", 0, 7)])
+
+    assert result == [[("Ann Lee", 0, 7)]]
+
+
+def test_ac_ner_06_sorted_by_start_and_offsets_match():
+    pages = ["Ann Lee met Bob Ray", "Bob Ray met Ann Lee"]
+    fake = {pages[0]: [("Bob Ray", 12, 19)], pages[1]: [("Ann Lee", 12, 19)]}.get
+
+    result = find_person_spans(pages, fake)
+
+    assert result[0] == [("Ann Lee", 0, 7), ("Bob Ray", 12, 19)]
+    assert all(
+        page[s:e] == n
+        for page, spans in zip(pages, result, strict=True)
+        for n, s, e in spans
+    )

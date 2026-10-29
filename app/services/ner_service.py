@@ -1,5 +1,6 @@
 """NER: extract PERSON names (with their offsets) from page texts."""
 
+import re
 from functools import lru_cache
 from typing import Protocol
 
@@ -31,19 +32,27 @@ def _is_name(name: str, drop_all_caps: bool) -> bool:
     return "\n" not in name and " " in name and not (drop_all_caps and name.isupper())
 
 
+def _propagate(text: str, names: set[str], found: list[Span]) -> list[Span]:
+    """Add every exact whole-word occurrence of ``names`` in ``text`` to ``found``."""
+    hits = [
+        (n, m.start(), m.end())
+        for n in names
+        for m in re.finditer(rf"(?<!\w){re.escape(n)}(?!\w)", text)
+    ]
+    return sorted(dict.fromkeys(found + hits), key=lambda s: (s[1], s[2]))
+
+
 def find_person_spans(
     pages: list[str], recognizer: NameRecognizer | None = None
 ) -> list[list[Span]]:
-    """Return the filtered person spans of each page, sorted by (start, end)."""
+    """Return person spans per page: filtered, plus names found on any page, sorted."""
     recognize = recognizer or spacy_persons
     drop_caps = get_settings().ner_drop_all_caps
-    return [
-        sorted(
-            (s for s in recognize(page) if _is_name(s[0], drop_caps)),
-            key=lambda s: (s[1], s[2]),
-        )
-        for page in pages
+    found = [
+        [s for s in recognize(page) if _is_name(s[0], drop_caps)] for page in pages
     ]
+    names = {n for spans in found for n, _, _ in spans}
+    return [_propagate(page, names, f) for page, f in zip(pages, found, strict=True)]
 
 
 def extract_names(text: str) -> list[str]:
