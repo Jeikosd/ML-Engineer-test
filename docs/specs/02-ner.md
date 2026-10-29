@@ -38,7 +38,7 @@
   3. `name.isupper()`, solo si `ner_drop_all_caps` es verdadero.
 - **Propagación (D4, `_propagate`, `proto/ner.py:85-100`):**
   - los nombres reunidos de todas las páginas, ya filtrados, se buscan en cada página como coincidencia exacta (distingue mayúsculas) con borde de palabra `(?<!\w)…(?!\w)`;
-  - se deduplica con un `set` de tuplas y se ordena por `(start, end)`. Como `text[start:end] == name`, dos spans con el mismo `(start, end)` son la misma tupla.
+  - se deduplica con `dict.fromkeys` sobre las tuplas y se ordena por `(start, end)`. Como `text[start:end] == name`, dos spans con el mismo `(start, end)` son la misma tupla. Se usa `dict.fromkeys` y no `set` porque conserva el orden de inserción: así, si alguien quita el `sorted`, AC-NER-06 falla siempre y no según el hash (medido: con `set`, la mutación sobrevivía en 25 de 200 semillas).
 - **Sin pandas en `app/`:** pandas solo está en el grupo `notebooks`. Tampoco va la columna `source`.
 
 ## Criterios de aceptación
@@ -65,3 +65,22 @@ En los unitarios, `fake` es un recognizer falso. La config se controla con `monk
 
 ## Explicación (JM)
 _Por cada AC, en 3 a 5 líneas: qué líneas lo cumplen y por qué. Respuestas a 3 preguntas de entrevistador. Se firma solo cuando Jeison puede explicarlo sin mirar._
+
+_Borrador de Claude para que Jeison lo revise. Las líneas son de `app/services/ner_service.py` (60 líneas). Pendiente: la firma de Jeison._
+
+- **AC-NER-01** (solo PERSON): la línea 27 se queda solo con `e.label_ == "PERSON"`. Así, "Acme Corp" (ORG), "Paris" (GPE) y "Monday" (DATE) no salen. `extract_names` (línea 60) devuelve los nombres. Es el único test con el modelo real.
+- **AC-NER-02** (filtros): `_is_name`, en la línea 32, descarta un span si tiene `"\n"` (cruza renglón), si no tiene `" "` (una sola palabra) o si está en MAYÚSCULAS. `"Robert Chen\nCFO"` tiene espacio, así que solo lo descarta el filtro de renglón, y por eso el test detecta si alguien quita ese filtro.
+- **AC-NER-03** (propagación): la línea 54 reúne los nombres hallados en todas las páginas. La 55 llama a `_propagate` en cada página, y la 40 busca cada nombre con `re.finditer`. Por eso "Robert Chen" aparece 2 veces en la página 1, aunque el fake no lo devuelva ahí.
+- **AC-NER-04** (bordes y duplicados): `(?<!\w)` y `(?!\w)`, en la línea 40, exigen que antes y después del nombre no haya una letra. "Ann Leeds" y "LeeAnn Lee" quedan fuera. `dict.fromkeys`, en la línea 42, deja una sola vez el `(0, 7)` que devuelven tanto el fake como la regex.
+- **AC-NER-05** (config): la línea 50 lee `get_settings().ner_drop_all_caps` dentro de la función. Con `False`, la condición `not (drop_all_caps and ...)` de la línea 32 siempre es verdadera y "JOHN SMITH" se conserva. El valor vive en `app/config.py:20` (`NER_DROP_ALL_CAPS`).
+- **AC-NER-06** (orden y offsets): la línea 42 ordena por `(start, end)`. El span propagado `("Ann Lee", 0, 7)` va antes que el del fake, así que el test solo pasa si se ordena. Como `dict.fromkeys` conserva el orden de inserción, sin `sorted` falla siempre, no según el hash. `text[start:end] == name` se cumple porque la regex y spaCy dan offsets sobre el mismo texto.
+- **AC-NER-07** (`extract_names` y vacíos):
+  - en la línea 49, `recognizer or spacy_persons` se resuelve en cada llamada, así que el test puede reemplazar `spacy_persons`;
+  - en la línea 60, `dict.fromkeys` deja los nombres únicos en orden de aparición;
+  - con `[]` no hay páginas y la salida es `[]`.
+- **AC-CFG-03**: `app/config.py:19-20` da los valores por defecto `en_core_web_sm` y `True`.
+
+**Preguntas de entrevistador**
+1. *¿Por qué el stub recibe un texto y tú trabajas por páginas?* Las cajas necesitan offsets dentro de cada página, y la propagación busca en todas las páginas los nombres de todo el documento. `extract_names` conserva la firma del stub (R1).
+2. *¿Cómo pruebas sin cargar spaCy?* El Protocol `NameRecognizer` (líneas 14-15) permite pasar un `dict.get` como recognizer. El modelo se carga recién en la primera llamada (`_load_model` con `@lru_cache`, líneas 18-21).
+3. *¿Cómo sabes que `app/` hace lo mismo que el notebook?* Con spaCy real sobre las 3 muestras, el multiconjunto de `(pdf, page, name, start, end)` es idéntico al del proto (sobra 0, falta 0). Da P 1.0 y R 54/55. Está en 02a y 02c, sección "Desde `app/`".
