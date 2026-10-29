@@ -58,10 +58,21 @@ Before any code, I set up the rules Claude Code works under (kept locally, not i
 - **Measured on 55 labeled mentions** (`eval/gold_names.csv`, 3 sample PDFs): precision 54/54 = 1.0, recall 54/55 = 0.982. `app/` reproduces the notebook's spans exactly. Same caveat as fuzzy matching: these are the samples that guided the filters.
 - **Known limits:** propagation is case-sensitive ("ROBERT CHEN" is not linked to "Robert Chen"); single-word mentions are dropped on purpose; a propagated span partially overlapping a longer spaCy span would give two spans (0 cases in the samples).
 
+## OCR and bounding boxes
+
+- **Bytes in, one open.** `ocr_pages(pdf_bytes)` opens the PDF once with `pymupdf.open(stream=..., filetype="pdf")`: the upload is already in memory, so no temp files. pymupdf still opens an image (a PNG) as a document even with `filetype="pdf"`, so the code also checks `doc.is_pdf`. Empty, non-PDF, image or corrupt bytes raise `InvalidPdfError` (it wraps pymupdf's `FileDataError`), so the endpoint maps it without importing pymupdf. The path-based stubs read the file and delegate.
+- **Every page, boxes in PDF points.** Each page is rendered at `OCR_DPI` (300) in grayscale and read by Tesseract behind an `OcrEngine` Protocol (unit tests use a fake). Pixels become points with `page.rect.width / pix.width`, so no DPI is hard-coded (the test runs at 150 DPI to catch that). Words with `conf < 0` or blank text are dropped.
+- **Origin is configurable.** Top-left by default, like the image; `BBOX_ORIGIN=bottom-left` flips each word (`y = H - y - h`) for PDF-native consumers. The flip is monotonic, so the union box does not change shape.
+- **Boxes by offsets, not string search.** NER spans and OCR words share the same page text, so a name's box is the union of the words its span touches. There is no string comparison to break on case or OCR noise. NER runs once over all pages, so a name found on one page is also boxed on the others.
+- **One box per occurrence.** 0 of 54 mentions cross a line (NER drops those), and `ExtractedName` has one box. Edge punctuation stays inside ("Thompson," → about 5 pt wider on 19/54 mentions); the box still contains the name.
+- **Measured.** A synthetic scanned PDF (fonts 11/14/24) gives a box inside the text box (±1 pt) with ≥ 0.95 of its width; IoU is not used because the reference is a line box and Tesseract boxes the ink. On the 3 samples: precision 1.0, recall 54/55, every box within ±2 pt of `eval/gold_boxes.csv`, and `app/` matches the notebook prototype exactly (0.0 pt). The miss (Lucas Zimmermann) is an NER miss: OCR reads both words.
+- **License note.** pymupdf is AGPL-3.0 (or Artifex commercial). Fine for this take-home; for a closed product, pypdfium2 (Apache/BSD) would replace the renderer.
+
 ## Use of AI tools
 
 - Claude Code (Anthropic) was used as a pair-programmer: researching options, drafting code and tests, and reviewing. The author reviewed and ran every change, owns every line, and made every commit.
 - The evaluation labels (`eval/gold_names.csv`) start from the NER output and were corrected by me against each page image: 3 missed mentions added with their page and line, and the result checked against an independent count of surnames in the OCR words.
+- The box reference (`eval/gold_boxes.csv`) comes from the notebook prototype, checked against the page images, plus one box built by hand from its two OCR words; it is not generated from `app/`, so the test does not compare the code with itself.
 
 ## References
 
