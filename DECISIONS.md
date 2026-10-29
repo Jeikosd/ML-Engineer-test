@@ -68,6 +68,15 @@ Before any code, I set up the rules Claude Code works under (kept locally, not i
 - **Measured.** A synthetic scanned PDF (fonts 11/14/24) gives a box inside the text box (±1 pt) with ≥ 0.95 of its width; IoU is not used because the reference is a line box and Tesseract boxes the ink. On the 3 samples: precision 1.0, recall 54/55, every box within ±2 pt of `eval/gold_boxes.csv`, and `app/` matches the notebook prototype exactly (0.0 pt). The miss (Lucas Zimmermann) is an NER miss: OCR reads both words.
 - **License note.** pymupdf is AGPL-3.0 (or Artifex commercial). Fine for this take-home; for a closed product, pypdfium2 (Apache/BSD) would replace the renderer.
 
+## Extraction endpoint
+
+- **Thin router, pure pipeline.** `POST /api/extract` reads the upload and delegates to `extract(pdf_bytes, names, engine, recognizer)`, a plain function (no state, so no class) that runs OCR → NER → boxes → fuzzy match. The OCR engine and the name recognizer are injected with `Depends`; tests replace them through `app.dependency_overrides`, so unit tests never run Tesseract or spaCy.
+- **`names` validated by FastAPI.** The form field is declared as `Json[list[NamePair]]`, so invalid JSON, a missing field or an empty name returns FastAPI's own 422 before any OCR runs.
+- **Errors by content, mapped in one place.** Three domain errors and one status table in `main.py`: `InvalidPdfError` → 422 (empty, not a PDF, an image, corrupt, or password-protected), `DocumentTooLargeError` → 413 (`MAX_UPLOAD_MB`, `MAX_PAGES`), `OcrEngineError` → 503 (Tesseract timeout or missing binary). There is no `%PDF-` magic check: the parser already rejects non-PDFs by content, and the PDF format allows bytes before the header. A password-protected PDF opens without error and fails only when rendered, so `ocr_pages` checks `needs_pass` right after opening; the page limit is checked in the same open, before rendering.
+- **Upload limit.** The router reads at most `MAX_UPLOAD_MB` + 1 byte. Starlette has already received the body (spooled to disk above 1 MB) and closes the file after the request, so the limit rejects the upload but does not save the transfer; in production a proxy limit would.
+- **Structured logs without PII.** One JSON line per request (method, path, status, ms) and one per extraction (pages, names in, names found, matches), both tagged with a request id taken from `X-Request-ID` or generated, and returned in the response header. Names are never logged. Standard library only.
+- **Measured.** On `company_memo.pdf` with the fuzzy notebook's query list, the endpoint returns the 8 mentions on page 0 and the 3 expected matches (integration test, skipped without Tesseract or the spaCy model).
+
 ## Use of AI tools
 
 - Claude Code (Anthropic) was used as a pair-programmer: researching options, drafting code and tests, and reviewing. The author reviewed and ran every change, owns every line, and made every commit.
