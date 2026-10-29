@@ -10,6 +10,8 @@ I work in three phases, in order:
 2. **Notebooks.** Each stage is prototyped in a local notebook on the sample PDFs: try options, see where they fail, measure, and keep the simplest one that works. Notebooks stay out of this PR; their conclusions are recorded in this file.
 3. **Implementation.** Each slice of `app/` then follows a short spec with numbered acceptance criteria, tests named after them (`test_ac_<area>_<nn>_*`), minimal code to pass them, and lint, format and tests green before the commit.
 
+Decisions that rest on published work cite it inline (author, year, section or table); full references are listed at the end of this file. Where a paper supports an idea but did not test our exact setup, the text says so and points to my own measurement.
+
 ## AI-assisted workflow
 
 Before any code, I set up the rules Claude Code works under (kept locally, not in this repository):
@@ -38,7 +40,23 @@ Before any code, I set up the rules Claude Code works under (kept locally, not i
 - **The `tesseract` binary is resolved from `PATH`**, like any command-line tool, instead of a configurable path. Linux package managers install it on `PATH`; the Windows installer does not, so the setup step there is to add it. Trade-off: one less setting, but Tesseract must be on `PATH`.
 - `.env.example` documents every key. `.gitignore` un-ignores it (`!.env.example`) because the original `.env.*` rule excluded it.
 
+## Fuzzy matching
+
+- **Normalization before comparing:** `casefold`, Unicode NFKD with combining marks removed, apostrophes deleted (so `O'Brien`, `O’Brien` and `OBrien` share one key), other punctuation turned into spaces, and the titles Dr/Mr/Mrs/Ms/Miss/Prof dropped. Titles are one of the sources of name variation listed by Christen (2006, Sec. 2.1); without dropping them, "Dr. Robert Chen" vs "Robert Chen" scores 0.88.
+- **Score = max(`fuzz.ratio`, `fuzz.token_sort_ratio`) / 100.** Both are full-string Indel similarities. For person names, edit-distance metrics beat token-based ones (Cohen et al. 2003, Table 2, Census data). `token_sort` handles reversed order ("Gonzalez Maria": 1.0 vs 0.571 with `ratio`); `ratio` handles a typo that sorting would move ("Katherine Dubois": 0.9375 vs 0.50). Taking the best of both orders follows Christen's "Permuted-Winkler" idea (2006, Sec. 3.2); applying it to Indel is my inference, measured on the labeled pairs below. `partial_ratio`, `token_set_ratio` and `WRatio` are not used: they give 1.0 to "Maria" vs "Maria Gonzalez".
+- **Threshold 0.90 (the README default), configurable with `FUZZY_THRESHOLD`** and validated to [0, 1]. The function keeps the stub's two-argument signature; `threshold=None` reads the setting at call time.
+- **Output:** every pair at or above the threshold, filtered on the raw score and rounded to 4 decimals only for output, sorted by score and then by name. Names are deduplicated by normalized key on both sides (the first spelling is kept), and names that normalize to an empty string are dropped (`ratio("", "")` is 100).
+- **Measured on 27 labeled pairs** (`eval/gold_fuzzy_pairs.csv`: 15 same-person variants, 12 hard negatives): recall 12/15 and false-positive rate 4/12, each with a 95 % Wilson interval ([0.55, 0.93] and [0.14, 0.61]), because the Wald interval breaks down at small n (Brown, Cai & DasGupta 2001). Precision and F1 are not reported: they depend on the positive/negative mix I chose, and F1 weighs precision and recall differently by method and threshold (Hand & Christen 2018). These are resubstitution numbers: the same pairs informed the choice of scorer, and Christen (2006) notes that thresholds depend on the data.
+- **Known limits:** initials ("J. Anderson"), middle names, two or more OCR errors in one name, and names one letter apart (Mario/Maria) are not resolved; `ø`/`ł` are not folded and `ü` does not become `ue`.
+
 ## Use of AI tools
 
 - Claude Code (Anthropic) was used as a pair-programmer: researching options, drafting code and tests, and reviewing. The author reviewed and ran every change, owns every line, and made every commit.
 - The evaluation labels (`eval/gold_names.csv`) start from the NER output and were corrected by me against each page image: 3 missed mentions added with their page and line, and the result checked against an independent count of surnames in the OCR words.
+
+## References
+
+- Brown, L. D., Cai, T. T., & DasGupta, A. (2001). Interval estimation for a binomial proportion. *Statistical Science*, 16(2), 101–133.
+- Christen, P. (2006). *A comparison of personal name matching: Techniques and practical issues*. Technical Report TR-CS-06-02, The Australian National University.
+- Cohen, W. W., Ravikumar, P., & Fienberg, S. E. (2003). A comparison of string metrics for matching names and records. *KDD Workshop on Data Cleaning and Object Consolidation*.
+- Hand, D., & Christen, P. (2018). A note on using the F-measure for evaluating record linkage algorithms. *Statistics and Computing*, 28(3), 539–547.
