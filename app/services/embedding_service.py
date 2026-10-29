@@ -3,6 +3,12 @@
 Implement this. Load the embedding model ONCE (not per request) and reuse it.
 """
 
+from typing import Protocol
+
+
+class Embedder(Protocol):
+    def __call__(self, texts: list[str]) -> list[list[float]]: ...
+
 
 def get_embeddings(texts: list[str]) -> list[list[float]]:
     """Embed a batch of chunks."""

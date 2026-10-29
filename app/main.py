@@ -18,8 +18,14 @@ from app.services.ocr_service import (
     InvalidPdfError,
     OcrEngineError,
 )
+from app.services.vector_service import VectorStoreError
 
-ERROR_STATUS = {InvalidPdfError: 422, DocumentTooLargeError: 413, OcrEngineError: 503}
+ERROR_STATUS = {
+    InvalidPdfError: 422,
+    DocumentTooLargeError: 413,
+    OcrEngineError: 503,
+    VectorStoreError: 503,
+}
 
 logging.basicConfig(format="%(message)s")
 logging.getLogger("app").setLevel(logging.INFO)  # ours only; libraries stay at WARNING
