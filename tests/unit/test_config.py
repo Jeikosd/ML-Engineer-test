@@ -29,3 +29,11 @@ def test_ac_cfg_03_ner_defaults():
 
 def test_ac_cfg_04_bbox_origin_default():
     assert Settings(_env_file=None).bbox_origin == "top-left"
+
+
+@pytest.mark.parametrize(("name", "value"), [("TOP_K", "0"), ("MIN_SCORE", "1.5")])
+def test_ac_ask_06_invalid_retrieval_settings_fail_at_startup(monkeypatch, name, value):
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
