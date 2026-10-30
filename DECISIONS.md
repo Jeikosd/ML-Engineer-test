@@ -77,6 +77,37 @@ Before any code, I set up the rules Claude Code works under (kept locally, not i
 - **Structured logs without PII.** One JSON line per request (method, path, status, ms) and one per extraction (pages, names in, names found, matches), both tagged with a request id taken from `X-Request-ID` or generated, and returned in the response header. Names are never logged. Standard library only.
 - **Measured.** On `company_memo.pdf` with the fuzzy notebook's query list, the endpoint returns the 8 mentions on page 0 and the 3 expected matches (integration test, skipped without Tesseract or the spaCy model).
 
+## RAG ingestion
+
+- **Chunks per page, 500 characters, 60 of overlap, cut only between words.** Each page's OCR text is split on whitespace; words are packed until the next one would pass 500 characters, and the next chunk starts with the last whole words that fit in 60 characters.
+  *Why:* the README forbids cutting words; chunking per page keeps the page number exact for `sources`; 500 characters is about 75 MiniLM tokens, far below its 256-token limit, so nothing is truncated.
+- **This strategy over five alternatives, for robustness rather than a metric.** Compared with paired tests (exact McNemar on hit@1, paired bootstrap of ΔMRR) on 22 questions with labeled pages (`eval/questions.json`, plus 4 with no answer): no overlap, sentences, recursive splitting, whole page, whole document.
+  *Why:* none differed significantly (all p ≥ 0.45, every ΔMRR interval contains 0), so the metric cannot choose. Overlap keeps a name that falls on a chunk border ("Jennifer Liu") whole in one chunk, and Chroma's own evaluation finds overlap neutral to slightly positive for this model (78.7 vs 78.5 recall, 250 tokens with 125 vs 0 overlap; Smith & Troynikov 2024). Whole document was the worst (ΔMRR −0.078) and loses the page. Semantic chunking was not tried: Qu et al. (2024) find it does not justify its cost.
+- **No OCR text normalization.**
+  *Why:* OCR noise degrades RAG (Zhang et al. 2025), but joining hyphens and collapsing whitespace did not change the metrics on our documents; code that changes nothing measurable is not added.
+- **Metrics read as regression checks, not as quality estimates.** Reference: hit@1 0.68 [0.47, 0.84], hit@3 0.95, MRR 0.82 [0.71, 0.93].
+  *Why:* with 5 pages in total, hit@3 is close to 1 for every strategy and 22 questions only detect large differences; the numbers say "it did not get worse", not how it would do on a real corpus.
+- **Measured: `app/` reproduces the prototype.** On the sample pages, `chunk_text` gives the same 12 chunks as the notebook prototype, and retrieval through `store_document_chunks` and `search_similar` ranks all 22 questions exactly as the prototype does.
+  *Why:* the notebook is where the strategy was chosen; this check shows the code that ships is that strategy and not a variant of it.
+- **`all-MiniLM-L6-v2`, normalized embeddings.**
+  *Why:* `bge-small-en-v1.5` scores higher on MTEB retrieval (51.68 vs 41.95; Muennighoff et al. 2023) but tied on our questions, so the change would not be measurable here. Normalized vectors make cosine, dot product and L2 rank the same.
+- **Embedding model stored in the collection metadata and checked on reopen.**
+  *Why:* MiniLM and bge-small both have 384 dimensions, so switching models without re-ingesting would mix vectors from two models with no error. A mismatch raises `VectorStoreError`.
+- **Chroma `PersistentClient`, one per process, one collection, cosine, explicit vectors.** Created with `{"hnsw": {"space": "cosine"}}` and `embedding_function=None`; queries always pass vectors; `score = 1 - distance`.
+  *Why:* Chroma's default is squared L2, which is not the score we want to report; without `embedding_function=None`, a text query makes Chroma download its own ONNX model (about 79 MB) and embed with a different model. One client per process avoids reopening the store on each request.
+- **IDs `doc_id:page:chunk`, with `doc_id` the SHA-256 of the PDF bytes; `filename` in the metadata.**
+  *Why:* the README requires IDs unique across documents; hashing the bytes makes the same PDF map to the same chunks under any filename. A re-scan has different bytes and counts as a new document.
+- **Re-ingestion deletes the document's chunks, then adds the new ones.**
+  *Why:* Chroma silently drops an `add` whose ID already exists (the old text stays), and `upsert` would leave stale chunks when a new version has fewer of them.
+- **`ChromaError` → `VectorStoreError` → 503.**
+  *Why:* `ChromaError` is the common base of Chroma's internal, not-found and invalid-argument errors, so one `except` covers them; the endpoint maps domain errors in one table, as `/api/extract` does, without importing Chroma.
+- **A PDF with no text returns 200 with `chunks_stored = 0`.**
+  *Why:* a blank page is a valid PDF with nothing to index, not a client error. The code skips Chroma there because `add([])` raises `ValueError`, which would become a 500.
+- **One uvicorn worker with embedded Chroma.**
+  *Why:* measured with two processes on the same path, the reader sees the new `count` (SQLite) but its `query` still uses the old vector index and returns the wrong chunk, with no error. One worker is uvicorn's default; more workers need Chroma as a separate service.
+- **No chunking or vector-store package beyond Chroma.**
+  *Why:* LangChain text splitters, semchunk, chonkie, fastembed, FAISS, LanceDB, Qdrant and sqlite-vec were reviewed; none saves anything against about 15 lines of chunking, and each adds dependencies (onnxruntime, grpc, pyarrow, langchain-core) or lacks metadata (FAISS).
+
 ## Use of AI tools
 
 - Claude Code (Anthropic) was used as a pair-programmer: researching options, drafting code and tests, and reviewing. The author reviewed and ran every change, owns every line, and made every commit.
@@ -92,4 +123,8 @@ Before any code, I set up the rules Claude Code works under (kept locally, not i
 - Gale, W. A., Church, K. W., & Yarowsky, D. (1992). One sense per discourse. *DARPA Speech and Natural Language Workshop*.
 - Hand, D., & Christen, P. (2018). A note on using the F-measure for evaluating record linkage algorithms. *Statistics and Computing*, 28(3), 539–547.
 - Krishnan, V., & Manning, C. D. (2006). An effective two-stage model for exploiting non-local dependencies in named entity recognition. *COLING-ACL 2006*.
+- Muennighoff, N., Tazi, N., Magne, L., & Reimers, N. (2023). MTEB: Massive Text Embedding Benchmark. *EACL 2023*.
+- Qu, R., Tu, R., & Bao, F. (2024). Is semantic chunking worth the computational cost? arXiv:2410.13070.
 - Ratinov, L., & Roth, D. (2009). Design challenges and misconceptions in named entity recognition. *CoNLL 2009*.
+- Smith, B., & Troynikov, A. (2024). *Evaluating chunking strategies for retrieval*. Chroma technical report. https://www.trychroma.com/research/evaluating-chunking
+- Zhang, J., et al. (2025). OCR hinders RAG: Evaluating the cascading impact of OCR on retrieval-augmented generation. *ICCV 2025*. arXiv:2412.02592.
