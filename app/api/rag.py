@@ -1,8 +1,4 @@
-"""RAG endpoints — implement `POST /api/ingest` and `POST /api/ask` here.
-
-Keep the router thin; delegate to the RAG / vector / OCR services. Map failures
-(bad upload, vector store down, LLM error) to meaningful HTTP status codes.
-"""
+"""`POST /api/ingest` and `POST /api/ask`: validate, delegate to the RAG service."""
 
 from typing import Annotated
 

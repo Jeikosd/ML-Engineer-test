@@ -1,9 +1,4 @@
-"""FastAPI application entrypoint.
-
-Assemble the app here: mount the routers under ``/api``, add ``GET /health``,
-and wire whatever cross-cutting concerns you decide on (config, logging,
-error handling, lifecycle). This skeleton just registers the routers.
-"""
+"""FastAPI app: routers under `/api`, the viewer, request logging and error statuses."""
 
 import logging
 from pathlib import Path

@@ -1,7 +1,4 @@
-"""Embeddings for RAG.
-
-Implement this. Load the embedding model ONCE (not per request) and reuse it.
-"""
+"""Embeddings for RAG: the sentence-transformers model is loaded once, on first use."""
 
 from functools import lru_cache
 from typing import Protocol

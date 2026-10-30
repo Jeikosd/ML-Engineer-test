@@ -1,11 +1,4 @@
-"""Vector store for RAG.
-
-Use whatever store you like — an embedded/local one (e.g. Chroma) is fine; a
-separate service (e.g. Qdrant) is a bonus. Implement this. Reminders (graded):
-any connection/config comes from config, not hardcoded; IDs must be unique
-across documents (a second ingest must not overwrite the first); wrap the client
-so failures surface as meaningful errors.
-"""
+"""Vector store: embedded Chroma, cosine, chunk ids `doc_id:page:chunk`."""
 
 from functools import lru_cache
 
