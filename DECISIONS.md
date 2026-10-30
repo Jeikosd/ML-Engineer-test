@@ -2,6 +2,19 @@
 
 Notable engineering decisions and trade-offs. This file grows with each slice.
 
+## Summary
+
+- **Every page, boxes in PDF points:** pixels → points with `page.rect.width / pix.width`, so no DPI is hard-coded. Measured on the 3 samples: NER precision 1.0, recall 54/55, boxes within ±2 pt of a hand-checked reference.
+- **Boxes by character offsets, not string search:** NER spans and OCR words share one page text, so OCR noise and case never break the lookup.
+- **Fuzzy score = max(`ratio`, `token_sort_ratio`):** full-string only, after casefold, accent and title removal; threshold 0.90, configurable.
+- **Services depend on small Protocols** (`OcrEngine`, `NameRecognizer`, `Embedder`, `LLM`) injected with `Depends`; unit tests never load a model, Tesseract or an LLM.
+- **Errors by content, mapped in one table** (422, 413, 502, 503, 504); one JSON log line per request with a request id, no names (PII).
+- **RAG chunks per page, cut only between words**; IDs `sha256:page:chunk`, so a second document never overwrites the first.
+- **Grounding:** `sources` are built in code from the retrieved chunks, never from the LLM reply; two abstention gates (similarity floor 0.20 and a fixed sentence). Measured: 21/22 answers, 4/4 abstentions.
+- **LLM over plain `httpx`, OpenAI-compatible:** 5 s / 60 s timeouts, 3 attempts with backoff on network errors, 429 and 5xx only.
+- **Embedded Chroma, one worker:** enough here; a second process would read a stale index (measured), so scaling needs a vector DB service.
+- **Numbers are regression checks on 3 PDFs, not quality estimates;** each section below says how it was measured and its known limits.
+
 ## How I work
 
 I work in three phases, in order:
