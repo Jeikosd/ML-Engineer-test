@@ -20,7 +20,7 @@ Notable engineering decisions and trade-offs. This file grows with each slice.
 I work in three phases, in order:
 
 1. **Research.** For each stage (OCR, PDF geometry, NER, fuzzy matching, RAG, evaluation) I reviewed the literature and compared candidate packages by license, maintenance and fit before writing code.
-2. **Notebooks.** Each stage is prototyped in a local notebook on the sample PDFs: try options, see where they fail, measure, and keep the simplest one that works. Notebooks stay out of this PR; their conclusions are recorded in this file.
+2. **Notebooks.** Each stage is prototyped in a local notebook on the sample PDFs: try options, see where they fail, measure, and keep the simplest one that works. The notebooks, with my research notes and the AI setup, are in `docs/working-materials.zip`; their conclusions are recorded in this file.
 3. **Implementation.** Each slice of `app/` then follows a short spec with numbered acceptance criteria, tests named after them (`test_ac_<area>_<nn>_*`), minimal code to pass them, and lint, format and tests green before the commit.
 
 Decisions that rest on published work cite it inline (author, year, section or table); full references are listed at the end of this file. Where a paper supports an idea but did not test our exact setup, the text says so and points to my own measurement.
