@@ -1,6 +1,7 @@
 """Vector store: embedded Chroma, cosine, chunk ids `doc_id:page:chunk`."""
 
 from functools import lru_cache
+from typing import Protocol
 
 import chromadb
 from chromadb.config import Settings
@@ -43,9 +44,19 @@ def init_collection() -> None:
     _collection()
 
 
+class ChunkStore(Protocol):
+    def __call__(
+        self, chunks: list[str], metadata: list[dict], embed: Embedder
+    ) -> None: ...
+
+
+class ChunkSearch(Protocol):
+    def __call__(self, query_embedding: list[float], top_k: int) -> list[dict]: ...
+
+
 def store_document_chunks(
     chunks: list[str],
-    metadata: list[dict] | None = None,
+    metadata: list[dict],
     embed: Embedder = get_embeddings,
 ) -> None:
     """Embed and store chunks, replacing any earlier chunks of the same documents."""

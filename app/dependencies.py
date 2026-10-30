@@ -7,6 +7,12 @@ from app.services.embedding_service import Embedder, get_embeddings
 from app.services.llm_client import LLM, chat
 from app.services.ner_service import NameRecognizer, spacy_persons
 from app.services.ocr_service import DocumentTooLargeError, OcrEngine, tesseract_data
+from app.services.vector_service import (
+    ChunkSearch,
+    ChunkStore,
+    search_similar,
+    store_document_chunks,
+)
 
 
 def get_ocr_engine() -> OcrEngine:
@@ -23,6 +29,14 @@ def get_embedder() -> Embedder:
 
 def get_llm() -> LLM:
     return chat
+
+
+def get_chunk_store() -> ChunkStore:
+    return store_document_chunks
+
+
+def get_chunk_search() -> ChunkSearch:
+    return search_similar
 
 
 def read_pdf(pdf_file: UploadFile) -> bytes:

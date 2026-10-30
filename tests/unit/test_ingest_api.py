@@ -5,9 +5,8 @@ import logging
 import pytest
 from fastapi.testclient import TestClient
 
-from app.dependencies import get_embedder, get_ocr_engine
+from app.dependencies import get_chunk_store, get_embedder, get_ocr_engine
 from app.main import app
-from app.services import rag_service
 from app.services.rag_service import chunk_text
 from app.services.vector_service import VectorStoreError, _collection
 from tests.unit.test_ocr_service import FakeEngine, blank_pdf, row
@@ -89,15 +88,32 @@ def test_ac_ing_03_invalid_upload_never_embeds(client, data, status):
     assert embedder.calls == 0
 
 
-def test_ac_ing_03_vector_store_down_is_503(client, monkeypatch):
+def test_ac_ing_03_vector_store_down_is_503(client):
     http, _ = client
 
     def down(*args, **kwargs):
         raise VectorStoreError("down")
 
-    monkeypatch.setattr(rag_service, "store_document_chunks", down)
+    app.dependency_overrides[get_chunk_store] = lambda: down
 
     response = post(http, blank_pdf())
 
     assert response.status_code == 503
     assert response.json() == {"detail": "down"}
+
+
+def test_ac_vec_di_01_ingest_uses_injected_store(client):
+    http, _ = client
+    received = []
+    app.dependency_overrides[get_chunk_store] = lambda: (
+        lambda *args: received.append(args)
+    )
+
+    response = post(http, blank_pdf(1), "doc.pdf")
+
+    chunks, metadata, _ = received[0]
+    assert response.status_code == 200
+    assert chunks == chunk_text(SENTENCE, 50, 20)
+    assert [m["chunk"] for m in metadata] == [0, 1]
+    assert {m["filename"] for m in metadata} == {"doc.pdf"}
+    assert _collection().count() == 0

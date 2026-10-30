@@ -4,14 +4,14 @@ import logging
 import pytest
 from fastapi.testclient import TestClient
 
-from app.dependencies import get_embedder, get_llm
+from app.dependencies import get_chunk_search, get_embedder, get_llm
 from app.main import app
 from app.services.llm_client import (
     LLMBadResponseError,
     LLMTimeoutError,
     LLMUnavailableError,
 )
-from app.services.vector_service import store_document_chunks
+from app.services.vector_service import _collection, store_document_chunks
 from tests.unit.test_rag_service import FakeLLM, table_embed, unit
 
 QUESTION = "what did Richard Hernandez say?"
@@ -69,3 +69,18 @@ def test_ac_ask_05_llm_errors_map_to_http(client, error, status):
 
     assert response.status_code == status
     assert response.json() == {"detail": "llm failed"}
+
+
+def chroma_queried(*args, **kwargs):
+    raise AssertionError("Chroma was queried")
+
+
+def test_ac_vec_di_02_ask_uses_injected_search(client, monkeypatch):
+    monkeypatch.setattr(_collection(), "query", chroma_queried)
+    hit = {"text": "x", "score": 1.0, "filename": "fake.pdf", "page": 3, "chunk": 2}
+    app.dependency_overrides[get_chunk_search] = lambda: lambda embedding, top_k: [hit]
+    app.dependency_overrides[get_llm] = lambda: FakeLLM("An answer.")
+
+    response = client.post("/api/ask", json={"question": QUESTION})
+
+    assert response.json() == {"answer": "An answer.", "sources": ["fake.pdf:p3:c2"]}

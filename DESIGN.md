@@ -27,7 +27,7 @@ flowchart LR
 ```
 
 - **Thin routers.** Each endpoint reads the request, receives its collaborators through `Depends`, and calls one plain function.
-- **Services depend on Protocols.** `OcrEngine`, `NameRecognizer`, `Embedder` and `LLM` are small callables. `dependencies.py` supplies the real ones; unit tests swap in fakes through `app.dependency_overrides`, so no model, network or LLM runs in them.
+- **Services depend on Protocols.** `OcrEngine`, `NameRecognizer`, `Embedder`, `LLM`, `ChunkStore` and `ChunkSearch` are small callables. `dependencies.py` supplies the real ones; unit tests swap in fakes through `app.dependency_overrides`, so no model, network or LLM runs in them.
 - **Functions where there is no state.** The only state is the loaded models and the Chroma client, each created once per process on first use (`lru_cache`).
 - **Domain errors, mapped to HTTP in one table** (`ERROR_STATUS` in `main.py`). Services never import FastAPI.
 - **One source of configuration**, `app/config.py`: environment, then `.env`, then defaults. Hosts, models, thresholds, DPI, timeouts and limits are all settings, listed in `.env.example`.

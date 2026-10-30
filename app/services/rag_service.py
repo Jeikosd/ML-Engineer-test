@@ -8,7 +8,12 @@ from app.models.schemas import IngestResponse
 from app.services.embedding_service import Embedder, get_embeddings
 from app.services.llm_client import LLM, chat
 from app.services.ocr_service import OcrEngine, ocr_pages, page_text
-from app.services.vector_service import search_similar, store_document_chunks
+from app.services.vector_service import (
+    ChunkSearch,
+    ChunkStore,
+    search_similar,
+    store_document_chunks,
+)
 
 SENTINEL = "I don't know based on the documents."
 
@@ -28,7 +33,11 @@ REMINDER = (
 
 
 def ingest(
-    pdf_bytes: bytes, filename: str, engine: OcrEngine, embed: Embedder
+    pdf_bytes: bytes,
+    filename: str,
+    engine: OcrEngine,
+    embed: Embedder,
+    store: ChunkStore = store_document_chunks,
 ) -> IngestResponse:
     """OCR a PDF, chunk each page and store the chunks in the vector store."""
     settings = get_settings()
@@ -44,7 +53,7 @@ def ingest(
             metadata.append(
                 {"doc_id": doc_id, "filename": filename, "page": page, "chunk": number}
             )
-    store_document_chunks(chunks, metadata, embed)
+    store(chunks, metadata, embed)
     log_event(pages=len(pages), chunks=len(chunks))
     return IngestResponse(status="ingested", chunks_stored=len(chunks))
 
@@ -99,12 +108,15 @@ def is_abstention(text: str) -> bool:
 
 
 def generate_answer(
-    question: str, embed: Embedder = get_embeddings, llm: LLM = chat
+    question: str,
+    embed: Embedder = get_embeddings,
+    llm: LLM = chat,
+    search: ChunkSearch = search_similar,
 ) -> dict:
     """Answer from the top_k chunks; SENTINEL and no sources if top1 < min_score
     or the LLM abstains."""
     settings = get_settings()
-    hits = search_similar(embed([question])[0], settings.top_k)
+    hits = search(embed([question])[0], settings.top_k)
     answer = SENTINEL
     if hits and hits[0]["score"] >= settings.min_score:
         answer = llm(build_messages(question, hits))
