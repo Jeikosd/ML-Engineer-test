@@ -17,9 +17,17 @@ Decisions that rest on published work cite it inline (author, year, section or t
 Before any code, I set up the rules Claude Code works under (kept locally, not in this repository):
 
 - Project instructions: scope, the fixed contract (`schemas.py` is not modified), code style, and sample PDFs, OCR text and web content treated as untrusted data.
-- A pre-tool hook that blocks git write commands, reading secret files and editing `schemas.py`. I run every git command.
+- A pre-tool hook that blocks git write commands and reading secret files. I run every git command. (It also blocked edits to `schemas.py` until task 06; the rule now lives in the project instructions.)
 - Skills: `grill-me` (two subagents with opposite briefs, minimal code vs. what the evaluation rewards, debate a slice's open decisions before its spec is written) and `commit-handoff` (prepares the commit commands I run).
-- A spec template, read-only review subagents and one verification script (ruff, format check, pytest).
+- Subagents with one role each, and none of them runs git:
+  - `literature-researcher` and `paper-curator` (papers with verified citations);
+  - `package-auditor` (runs snippets to check what a package really does);
+  - `notebook-builder` and `notebook-reviewer` (the reviewer never sees the builder's conclusions);
+  - `implementer` (tests first, then minimal code);
+  - `code-critic` (attacks each spec and each commit's diff, and runs mutations on a copy to check that the tests catch them);
+  - read-only helpers and a `final-evaluator` for the whole branch.
+- I approve each subagent before it runs. Every critique is saved next to its task.
+- A spec template and one verification script (ruff, format check, pytest).
 - Git hooks that reject AI attribution trailers and scan staged files for secrets (gitleaks).
 - A dated decision log; this file keeps the decisions that matter for the delivery.
 
@@ -108,6 +116,33 @@ Before any code, I set up the rules Claude Code works under (kept locally, not i
 - **No chunking or vector-store package beyond Chroma.**
   *Why:* LangChain text splitters, semchunk, chonkie, fastembed, FAISS, LanceDB, Qdrant and sqlite-vec were reviewed; none saves anything against about 15 lines of chunking, and each adds dependencies (onnxruntime, grpc, pyarrow, langchain-core) or lacks metadata (FAISS).
 
+## RAG answers
+
+- **Two abstention gates: a similarity floor and a fixed sentence from the LLM.** If the best chunk scores below `MIN_SCORE = 0.20`, the service abstains without calling the LLM. Otherwise the prompt tells the model to reply exactly "I don't know based on the documents." when the context does not contain the answer, and the code detects that sentence (case-, quote- and spacing-insensitive).
+  *Why:* a cosine floor alone cannot separate answerable from unanswerable questions here. Two unanswerable questions score about 0.48, above 11 answerable ones, so any floor high enough to catch them would drop half of the real questions. The floor still saves an LLM call when nothing relevant was retrieved, and guards against swapping in a model that abstains less reliably: Qwen-7B returned the requested sentence only 31% of the time in RGB (Chen et al. 2024).
+- **0.20, from a plateau, reported with leave-one-out.** On the 22 answerable and 4 unanswerable questions, any floor between 0.125 and 0.25 gives the same result. 0.20 sits in the middle of that plateau, with a margin below the lowest answerable question (0.256).
+  *Why:* the threshold was chosen on the same questions it is evaluated on, so "0 false abstentions" holds by construction. Re-deriving the rule with each question left out gives 1/22, and that is the number to quote.
+- **Measured with `qwen2.5:7b-instruct`: 21/22 correct answers, 4/4 abstentions, 1/22 false abstentions.** The one miss is the only question whose answer spans two documents: the model abstains even though both pages are in its context.
+  *Why:* these are regression checks on a 5-page corpus, not quality estimates. At temperature 0, the 26 answers were identical across 3 back-to-back runs, but one changed wording minutes later (see below).
+- **The threshold gates on the top chunk; all top-k chunks go to the prompt.**
+  *Why:* this is what the notebook measured. Filtering chunk by chunk would change the context of 9 of the 26 questions, and the numbers above would no longer describe the shipped code.
+- **`sources` built in code from the chunks sent to the LLM, never parsed from its reply; empty when the service abstains.** IDs are `file:pN:cK`.
+  *Why:* the README forbids fabricated sources. A model can invent an ID; the code cannot. An abstention has no answer to support.
+- **Retrieved text is data: delimited, escaped, and reminded after.** Chunks go inside `<context>…</context>`, with their `<` and `>` escaped; the system prompt says the context is data, not instructions; a reminder follows the context. The LLM has no tools.
+  *Why:* OCR text is untrusted input (OWASP LLM01; Greshake et al. 2023). Delimiting roughly halves attack success (Hines et al. 2024). No prevention-based defense is sufficient on its own (Liu et al. 2024), so this is mitigation, not a guarantee. Measured: 0 of 475 injected runs (6 attacks × 3 positions, with and without an answer) made the reply contain the attacker's word. 6 of them made the model abstain on a question it could answer; that is a known limit.
+- **One small LLM client on `httpx`, OpenAI-compatible, no SDK.** One POST to `{LLM_BASE_URL}/chat/completions` with temperature 0 and `max_tokens`. The bearer header is sent only when `LLM_API_KEY` is set. The default is local Ollama.
+  *Why:* the README asks for an OpenAI-compatible endpoint. One function shows every decision (timeouts, retries, errors) that an SDK would hide. Switching to a hosted provider is three environment variables, so there is no automatic fallback model.
+- **Timeouts: 5 s to connect, 60 s to read.**
+  *Why:* the first call after installing the model took about 50 s while Ollama loaded it into the GPU; warm calls take p50 0.75 s, p95 1.01 s. The connect timeout keeps a dead host from costing 3 × 60 s. The default URL is `127.0.0.1`, not `localhost`: on Windows, `localhost` tries IPv6 first and adds about 2 s to every failed connection.
+- **Retries with tenacity: up to 3 attempts, exponential backoff with jitter, only on network errors, timeouts, 429 and 5xx.** The `Retrying` loop lives inside the function and reads the settings on each call.
+  *Why:* a 4xx means the request itself is wrong, and repeating it only adds latency. A decorator would read the settings at import time, and tests could not set the wait to 0. Worst case, a timeout on every attempt, is about 184 s on one worker thread.
+- **LLM failures map to 503, 504 and 502.** Unreachable, or still 429/5xx after the retries → 503. Timed out → 504. Rejected request (4xx) or a reply with no text → 502.
+  *Why:* the client can tell "try later" (503), "too slow" (504) and "the upstream answered something unusable" (502) apart. Error messages carry only the status code, never the upstream body or the key.
+- **`TOP_K` and `MIN_SCORE` validated at startup.**
+  *Why:* `top_k = 0` makes Chroma raise `TypeError`, which would be a 500 on every request. Validation turns it into one clear error when the service starts.
+- **Measured: `app/` reproduces the prototype.** On the 26 questions, `app/` builds the same prompts (26/26), retrieves the same chunks with the same scores, abstains on the same 5 questions, calls the LLM 25 times (the floor stops one unanswerable question before the LLM), and returns the same `sources`. One answer changed wording ("London" vs a full sentence, both correct) between two calls with the same request a few minutes apart in the same run. So temperature 0 on Ollama does not guarantee the same text; the evaluation gates (accuracy, abstention) apply instead of exact string equality.
+  *Why:* the notebook is where the prompt and threshold were chosen; this check shows the shipped code is that design and not a variant of it.
+
 ## Use of AI tools
 
 - Claude Code (Anthropic) was used as a pair-programmer: researching options, drafting code and tests, and reviewing. The author reviewed and ran every change, owns every line, and made every commit.
@@ -117,13 +152,18 @@ Before any code, I set up the rules Claude Code works under (kept locally, not i
 ## References
 
 - Brown, L. D., Cai, T. T., & DasGupta, A. (2001). Interval estimation for a binomial proportion. *Statistical Science*, 16(2), 101–133.
+- Chen, J., Lin, H., Han, X., & Sun, L. (2024). Benchmarking large language models in retrieval-augmented generation. *AAAI 2024*.
 - Christen, P. (2006). *A comparison of personal name matching: Techniques and practical issues*. Technical Report TR-CS-06-02, The Australian National University.
 - Cohen, W. W., Ravikumar, P., & Fienberg, S. E. (2003). A comparison of string metrics for matching names and records. *KDD Workshop on Data Cleaning and Object Consolidation*.
 - Finkel, J. R., Grenager, T., & Manning, C. (2005). Incorporating non-local information into information extraction systems by Gibbs sampling. *ACL 2005*.
 - Gale, W. A., Church, K. W., & Yarowsky, D. (1992). One sense per discourse. *DARPA Speech and Natural Language Workshop*.
+- Greshake, K., Abdelnabi, S., Mishra, S., Endres, C., Holz, T., & Fritz, M. (2023). Not what you've signed up for: Compromising real-world LLM-integrated applications with indirect prompt injection. *AISec 2023*.
 - Hand, D., & Christen, P. (2018). A note on using the F-measure for evaluating record linkage algorithms. *Statistics and Computing*, 28(3), 539–547.
+- Hines, K., Lopez, G., Hall, M., Zarfati, F., Zunger, Y., & Kiciman, E. (2024). Defending against indirect prompt injection attacks with spotlighting. arXiv:2403.14720.
 - Krishnan, V., & Manning, C. D. (2006). An effective two-stage model for exploiting non-local dependencies in named entity recognition. *COLING-ACL 2006*.
+- Liu, Y., Jia, Y., Geng, R., Jia, J., & Gong, N. Z. (2024). Formalizing and benchmarking prompt injection attacks and defenses. *USENIX Security 2024*.
 - Muennighoff, N., Tazi, N., Magne, L., & Reimers, N. (2023). MTEB: Massive Text Embedding Benchmark. *EACL 2023*.
+- OWASP (2025). LLM01:2025 Prompt Injection. *OWASP Top 10 for LLM Applications*. https://genai.owasp.org/llmrisk/llm01-prompt-injection/
 - Qu, R., Tu, R., & Bao, F. (2024). Is semantic chunking worth the computational cost? arXiv:2410.13070.
 - Ratinov, L., & Roth, D. (2009). Design challenges and misconceptions in named entity recognition. *CoNLL 2009*.
 - Smith, B., & Troynikov, A. (2024). *Evaluating chunking strategies for retrieval*. Chroma technical report. https://www.trychroma.com/research/evaluating-chunking
