@@ -120,3 +120,37 @@ def test_ac_log_01_json_log_with_request_id_and_no_names(fake, caplog):
     assert request["request_id"] == "abc" and request["status"] == 200
     assert "ann" not in caplog.text.lower()
     assert post(blank_pdf()).headers["X-Request-ID"] not in ("", "abc")
+
+
+def break_engine():
+    def crash(image):
+        raise RuntimeError("secret detail")
+
+    app.dependency_overrides[get_ocr_engine] = lambda: crash
+
+
+def test_ac_log_02_unhandled_error_is_logged_as_500(fake, caplog):
+    caplog.set_level(logging.INFO, logger="app")
+    break_engine()
+    files = {"pdf_file": ("doc.pdf", blank_pdf(), "application/pdf")}
+
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/api/extract",
+        files=files,
+        data={"names": json.dumps(ANN_LEE)},
+        headers={"X-Request-ID": "boom"},
+    )
+
+    assert response.status_code == 500
+    events = [json.loads(r.getMessage()) for r in caplog.records if r.name == "app"]
+    request = next(e for e in events if "status" in e)
+    assert request["request_id"] == "boom" and request["status"] == 500
+    assert request["ms"] >= 0
+    assert "secret detail" not in caplog.text
+
+
+def test_ac_log_03_unhandled_error_is_not_swallowed(fake):
+    break_engine()
+
+    with pytest.raises(RuntimeError, match="secret detail"):
+        post(blank_pdf())

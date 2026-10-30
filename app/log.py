@@ -20,10 +20,12 @@ async def log_requests(request: Request, call_next):
     """Reuse X-Request-ID or create one, return it, and log the request."""
     request_id.set(request.headers.get("X-Request-ID") or uuid.uuid4().hex)
     start = time.perf_counter()
-    response = await call_next(request)
-    response.headers["X-Request-ID"] = request_id.get()
-    ms = round((time.perf_counter() - start) * 1000, 1)
-    log_event(
-        method=request.method, path=request.url.path, status=response.status_code, ms=ms
-    )
-    return response
+    status = 500  # stays 500 if call_next raises; the exception still propagates
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers["X-Request-ID"] = request_id.get()
+        return response
+    finally:
+        ms = round((time.perf_counter() - start) * 1000, 1)
+        log_event(method=request.method, path=request.url.path, status=status, ms=ms)
