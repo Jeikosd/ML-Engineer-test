@@ -143,6 +143,15 @@ Before any code, I set up the rules Claude Code works under (kept locally, not i
 - **Measured: `app/` reproduces the prototype.** On the 26 questions, `app/` builds the same prompts (26/26), retrieves the same chunks with the same scores, abstains on the same 5 questions, calls the LLM 25 times (the floor stops one unanswerable question before the LLM), and returns the same `sources`. One answer changed wording ("London" vs a full sentence, both correct) between two calls with the same request a few minutes apart in the same run. So temperature 0 on Ollama does not guarantee the same text; the evaluation gates (accuracy, abstention) apply instead of exact string equality.
   *Why:* the notebook is where the prompt and threshold were chosen; this check shows the shipped code is that design and not a variant of it.
 
+## Audit viewer and CI
+
+- **Audit viewer: one static page at `/viewer/`, vanilla JS + pdf.js 6.4.299 from cdnjs, as the README suggests.** It sends the PDF to `/api/extract`, renders each page and draws each box at `x × scale, y × scale` with size `width × scale` by `height × scale`.
+  *Why:* boxes are PDF points with a top-left origin over the page as PyMuPDF renders it, and pdf.js's viewport has the same size, also for a cropped or rotated page (checked on a test PDF). No build step, no npm and no new Python dependency: `StaticFiles` ships with FastAPI, and the page shares the API's origin, so there is no CORS.
+- **Viewer limits.** It needs network access to cdnjs, and the ES module import carries no integrity hash. It assumes `BBOX_ORIGIN=top-left` and says so on the page. Its unit test checks that the page is served with the pinned pdf.js and calls `/api/extract`; box alignment was checked by eye on the samples.
+- **Ask page at `/viewer/ask.html`: ingest PDFs and ask questions from the browser.** Plain JS on top of `/api/ingest` and `/api/ask`, served by the same mount; no backend change. Sources are shown as file, 1-based page and chunk; an empty `sources` list is shown as an abstention.
+- **CI on GitHub Actions: ruff, format and pytest on every push and PR.** The runner is pinned to `ubuntu-24.04`, actions are pinned by commit SHA to releases at least two weeks old, the token is read-only, and `uv sync --locked` fails if `uv.lock` is out of date. Tesseract comes from apt, so the OCR and extraction end-to-end tests run; the RAG tests skip (no cached embedding model, no LLM).
+  *Why:* GitHub recommends pinning actions to a full commit SHA. A fixed runner keeps the Tesseract version from changing silently: CI gets 5.3.4 from Ubuntu while development used 5.4, and `tesseract --version` plus `pytest -rs -v` in the log make any difference visible.
+
 ## Use of AI tools
 
 - Claude Code (Anthropic) was used as a pair-programmer: researching options, drafting code and tests, and reviewing. The author reviewed and ran every change, owns every line, and made every commit.
