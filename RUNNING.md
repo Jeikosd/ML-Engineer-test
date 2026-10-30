@@ -33,7 +33,7 @@ curl -H "Content-Type: application/json" \
      http://127.0.0.1:8000/api/ask
 ```
 
-On Windows, run them in Git Bash, or in PowerShell 7.3+ with each command on one line (Windows PowerShell 5.1 strips the JSON quotes). Interactive docs are at `http://127.0.0.1:8000/docs`.
+On Windows, run them in Git Bash, or in PowerShell 7.3+ with each command on one line (Windows PowerShell 5.1 strips the JSON quotes). Interactive docs are at `http://127.0.0.1:8000/docs`. Audit viewer: open `http://127.0.0.1:8000/viewer/`. To ingest PDFs and ask questions in the browser: `http://127.0.0.1:8000/viewer/ask.html`.
 
 ## Tests
 
@@ -44,3 +44,5 @@ uv run ruff check . && uv run ruff format --check .
 ```
 
 Tesseract tests skip without Tesseract. RAG tests skip until MiniLM is in the Hugging Face cache (after the first ingest) and, for answers, until Ollama serves the model. The spaCy model ships with `uv sync`.
+
+CI (`.github/workflows/ci.yml`) runs ruff and `pytest` on every push and PR with Tesseract installed; the RAG tests skip there (no MiniLM cache, no Ollama).

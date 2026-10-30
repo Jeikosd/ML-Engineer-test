@@ -7,6 +7,8 @@ How the service is built and how it would grow. The reasoning, measurements and 
 ```mermaid
 flowchart LR
     C[Client] --> M["main.py<br/>request log, error table"]
+    VW["viewer/index.html<br/>pdf.js audit page at /viewer/"] -->|POST /api/extract| M
+    AP["viewer/ask.html<br/>ingest and ask page"] -->|POST /api/ingest, /api/ask| M
     M --> RE["api/extract.py"]
     M --> RR["api/rag.py"]
     RE --> D["dependencies.py<br/>injects Protocols"]
