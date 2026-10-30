@@ -6,9 +6,11 @@ error handling, lifecycle). This skeleton just registers the routers.
 """
 
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.extract import router as extract_router
 from app.api.rag import router as rag_router
@@ -51,6 +53,11 @@ for error in ERROR_STATUS:
 
 app.include_router(extract_router, prefix="/api", tags=["extraction"])
 app.include_router(rag_router, prefix="/api", tags=["rag"])
+app.mount(
+    "/viewer",
+    StaticFiles(directory=Path(__file__).parent / "viewer", html=True),
+    name="viewer",
+)
 
 
 @app.get("/health")

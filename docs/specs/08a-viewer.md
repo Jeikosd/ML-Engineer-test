@@ -19,6 +19,7 @@
 - Para cada página (`getPage(n + 1)`, porque `page_number` empieza en 0):
   - un canvas con `getViewport({scale})`;
   - cada caja es un `div` posicionado en `left = x·scale`, `top = y·scale`, `width = w·scale`, `height = h·scale`, con el nombre como etiqueta.
+- Cada página lleva el título `Page k of n`, con n = `pdf.numPages` (añadido en la revisión manual del 2026-10-30: la página 2 quedaba fuera de pantalla y no se notaba).
 - Cada página es un `div` con `position:relative`. El canvas mide en CSS `viewport.width × viewport.height` y nada lo escala (sin `max-width`). La escala es una constante del JS (`SCALE = 1.5`). La nitidez en HiDPI no entra.
 - Las cajas cuyo `name` coincide exactamente con algún `fuzzy_matches[].extracted_name` llevan otro color, y debajo va la tabla de coincidencias.
 - Si la API responde con error, se muestra el `detail` en la página: tal cual si es texto, y con `JSON.stringify(detail)` si es la lista de validación de FastAPI.
