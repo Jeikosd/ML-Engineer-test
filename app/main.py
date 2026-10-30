@@ -13,6 +13,11 @@ from fastapi.responses import JSONResponse
 from app.api.extract import router as extract_router
 from app.api.rag import router as rag_router
 from app.log import log_requests
+from app.services.llm_client import (
+    LLMBadResponseError,
+    LLMTimeoutError,
+    LLMUnavailableError,
+)
 from app.services.ocr_service import (
     DocumentTooLargeError,
     InvalidPdfError,
@@ -25,6 +30,9 @@ ERROR_STATUS = {
     DocumentTooLargeError: 413,
     OcrEngineError: 503,
     VectorStoreError: 503,
+    LLMUnavailableError: 503,
+    LLMTimeoutError: 504,
+    LLMBadResponseError: 502,
 }
 
 logging.basicConfig(format="%(message)s")

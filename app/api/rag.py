@@ -8,11 +8,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, UploadFile
 
-from app.dependencies import get_embedder, get_ocr_engine, read_pdf
-from app.models.schemas import IngestResponse
+from app.dependencies import get_embedder, get_llm, get_ocr_engine, read_pdf
+from app.models.schemas import IngestResponse, RAGRequest, RAGResponse
 from app.services.embedding_service import Embedder
+from app.services.llm_client import LLM
 from app.services.ocr_service import OcrEngine
-from app.services.rag_service import ingest
+from app.services.rag_service import generate_answer, ingest
 
 router = APIRouter()
 
@@ -27,4 +28,10 @@ def ingest_pdf(
     return ingest(pdf_bytes, pdf_file.filename, engine, embed)
 
 
-# TODO: implement POST /api/ask    (response_model=RAGResponse)
+@router.post("/ask", response_model=RAGResponse)
+def ask(
+    body: RAGRequest,
+    embed: Annotated[Embedder, Depends(get_embedder)],
+    llm: Annotated[LLM, Depends(get_llm)],
+):
+    return RAGResponse(**generate_answer(body.question, embed, llm))
