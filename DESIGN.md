@@ -101,7 +101,8 @@ The only deviation from the suggested stack is `rapidfuzz` for `thefuzz`. Ollama
 | Embedding model changed without re-ingesting | Detected on open → 503 | Re-ingest |
 | LLM down, 429, 5xx | 3 attempts with jittered backoff, then 503 | — |
 | LLM timeout | 504; worst case about 184 s on one thread | `def` endpoints share a thread pool ([FastAPI](https://fastapi.tiangolo.com/async/)) of 40 threads by default ([AnyIO](https://anyio.readthedocs.io/en/stable/threads.html)); a stalled LLM can fill it. Next: shorter read timeout for hosted models, circuit breaker |
-| LLM rejects the request (4xx) or its reply has no text field | 502, upstream body not exposed | A blank `content` is returned as an empty answer with 200 |
+| LLM rejects the request (4xx) or its reply has no text field | 502, upstream body not exposed | — |
+| LLM reply is blank | Treated as an abstention: sentinel, no sources | — |
 | Nothing relevant retrieved | Abstains without calling the LLM (`MIN_SCORE = 0.20`) | — |
 | Context lacks the answer | Model replies with a fixed sentence; returned with no sources (4/4) | Misses the one two-document question (1/22) |
 | Same request, different wording | Temperature 0 does not guarantee identical text: one answer changed minutes apart | Tests check correctness and abstention, not strings |

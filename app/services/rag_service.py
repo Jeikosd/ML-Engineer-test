@@ -100,8 +100,8 @@ def _norm(text: str) -> str:
 
 
 def is_abstention(text: str) -> bool:
-    """True if the text contains the sentinel, ignoring case, quotes and final dot."""
-    return _norm(SENTINEL).rstrip(".") in _norm(text)
+    """True if blank or contains the sentinel, ignoring case, quotes and final dot."""
+    return not _norm(text) or _norm(SENTINEL).rstrip(".") in _norm(text)
 
 
 def generate_answer(
